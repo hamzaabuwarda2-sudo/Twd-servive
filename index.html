@@ -327,7 +327,7 @@ function calculateResult(){
 
   // رسالة الكشف (نحن نخدع العنوان: نكشف الآن أن الاختبار كان عن البيوت)
   let revealHtml = `
-    <h2>النتيجة — ${name} </h2><span style="color:#ffd86b">${topHouse}</span></p>
+    <h2>النتيجة — ${name}${topHouse} </h2>
     <p class="small">مفاجأة! الاختبار الذي بدا كـ "هل ستنجو في TWD" كان يقيس أي بيت من <strong>Game of Thrones</strong> تنتمي إليه.</p>
     <p><strong>البيت الأقرب لك:</strong> <span style="color:#ffd86b">${topHouse}</span></p>
     <p class="small">${houseDesc}</p>
