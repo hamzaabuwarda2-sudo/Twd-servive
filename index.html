@@ -1,1 +1,456 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>هل ستنجو في TWD؟</title>
+<style>
+  :root{
+    --bg:#0f1115; --card:#14171b; --muted:#9aa3ad; --accent:#e85a4f;
+    --glass: rgba(255,255,255,0.03);
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:Tahoma,Arial,system-ui,sans-serif;background:var(--bg);color:#eef2f5;padding:16px}
+  .wrap{max-width:920px;margin:0 auto}
+  header{display:flex;flex-direction:column;gap:6px;margin-bottom:12px}
+  h1{margin:0;font-size:22px;color:var(--accent);text-align:center}
+  p.lead{margin:0;text-align:center;color:var(--muted)}
+  .card{background:linear-gradient(180deg,var(--card), #0f1316);border-radius:14px;padding:14px;margin:12px 0;box-shadow:0 6px 30px rgba(0,0,0,0.6)}
+  label.field{display:block;margin-bottom:8px;font-size:14px;color:var(--muted)}
+  input[type="text"]{width:100%;padding:10px;border-radius:10px;border:1px solid rgba(255,255,255,0.04);background:var(--glass);color:inherit}
+  .question{margin:14px 0;padding:12px;border-radius:10px;background:rgba(255,255,255,0.02)}
+  .qtitle{font-weight:700;margin-bottom:8px}
+  .opts{display:flex;flex-direction:column;gap:8px}
+  .opt{padding:10px;border-radius:10px;background:transparent;border:1px solid rgba(255,255,255,0.03);cursor:pointer; transition:all .18s}
+  .opt:hover{transform:translateY(-3px);background:rgba(255,255,255,0.02)}
+  .opt input{margin-left:10px}
+  .actions{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;margin-top:12px}
+  .btn{background:var(--accent);color:#fff;border:none;padding:10px 14px;border-radius:10px;cursor:pointer;font-weight:700}
+  .btn.ghost{background:transparent;border:1px solid rgba(255,255,255,0.06)}
+  #result{margin-top:16px;padding:14px;border-radius:12px;background:linear-gradient(180deg,#0f1418,#0b0d0f);display:none}
+  #result h2{margin:6px 0;color:#ffd86b}
+  .small{color:var(--muted);font-size:13px}
+  .log{margin-top:12px}
+  .log-item{padding:10px;border-radius:10px;background:rgba(255,255,255,0.02);margin-bottom:8px;display:flex;justify-content:space-between;gap:8px;align-items:center}
+  .chip{background:#111;border-radius:999px;padding:6px 8px;color:var(--muted);font-size:12px}
+  footer{margin-top:18px;text-align:center;color:var(--muted);font-size:13px}
+  @media (min-width:720px){
+    .row{display:flex;gap:12px}
+    .col{flex:1}
+  }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <header class="card">
+      <h1>هل ستنجو في TWD؟</h1>
+      <p class="lead">اختبار سريع عن البقاء — (ملاحظة: في النهاية سنكشف عن البيت الذي تنتمي إليه في Game of Thrones)</p>
+    </header>
 
+    <div class="card">
+      <label class="field">اسمك (سيظهر مع النتيجة):</label>
+      <input id="playerName" type="text" placeholder="اكتب اسمك هنا (اختياري)" />
+    </div>
+
+    <form id="quizForm" class="card" autocomplete="off"></form>
+
+    <div class="actions">
+      <button id="calcBtn" class="btn">أظهر النتيجة</button>
+      <button id="resetBtn" class="btn ghost" type="button">إعادة الاختبار</button>
+      <button id="clearLogBtn" class="btn ghost" type="button">مسح السجل</button>
+    </div>
+
+    <div id="result" class="card" role="status" aria-live="polite"></div>
+
+    <div id="logArea" class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <strong>سجل نتائج المتسابقين (محلي)</strong>
+        <span class="small">نتائج محفوظة على هذا المتصفح فقط</span>
+      </div>
+      <div id="logList" class="log"></div>
+    </div>
+
+    <footer>
+      ملاحظة: هذا الاختبار للاستخدام الترفيهي فقط. السجل محلي على جهازك — لم يتم إرسال أي بيانات للخادم.
+    </footer>
+  </div>
+
+<script>
+/* === تعريف البيوت (بالعربي) ووصف قصير لكل بيت === */
+const HOUSES = [
+  { key: "ستارك", desc: "شجاع، ملتزم بالشرف، يضع العائلة والمجتمع فوق كل شيء." },
+  { key: "لانيستر", desc: "طموح وذكي، يسعى للسلطة والثراء ويخطط لمصلحته." },
+  { key: "تارغاريان", desc: "طموح وكاريزمي، مستعد للمخاطرة من أجل العرش." },
+  { key: "براثيون", desc: "قوي واندفاعي، يتخذ قرارات جريئة وصريحة." },
+  { key: "غرايجوي", desc: "قاسي ومستقل، يقدّر القوة والحرية فوق كل شيء." },
+  { key: "تايريل", desc: "دبلوماسي ومتأنٍ، يستخدم العلاقات للحصول على النفوذ." }
+];
+
+/* === الأسئلة (12 سؤال) — صياغة مُموهة (المطلوبة) ===
+   لاحظ: ترتيب التعيين الداخلي للـبيوت يتم باستخدام دوران (rotation)
+   ثم نخلط ترتيب الخيارات عند العرض لتقليل التحيز
+*/
+const QUESTIONS = [
+  { q: "لو انضممت لمدينة جديدة شو رح تعمل؟",
+    opts: [
+      "أراقب الناس وأختار باحتياط من أتقرب له.",
+      "أتودد فورًا للأقوياء لأكسب نفوذًا.",
+      "أتحرك بحرارة مع العامة لكسب ثقتهم.",
+      "أجعل وجودي مسموعًا وأفرض نفسي بلا تردد."
+    ]
+  },
+  { q: "إذا اقترح مستشارك خطة خطيرة لكنها فعّالة، ماذا تفعل؟",
+    opts: [
+      "أطلب وقتًا للتفكير وأدرس النتائج بعناية.",
+      "أوافق بشرط ضمان مصلحتي أولًا.",
+      "أنفذها فورًا إذا ستثبت سلطتي.",
+      "أرفض إذا كان فيها أذى واضح للآخرين."
+    ]
+  },
+  { q: "وجدت كنزًا في منطقة مهجورة — ماذا تفعل؟",
+    opts: [
+      "أوزع الجزء الأكبر على أهل البلدة والمحتاجين.",
+      "أحتفظ به لنفسي وأضمن مستقبلي.",
+      "أستخدمه لتجميع قوة (جيش/حماية) إن لزم.",
+      "أبيع جزءًا لأصحاب النفوذ لأكسب ولاءهم ونفوذًا." // (الصياغة المعاد صياغتها كما طلبت)
+    ]
+  },
+  { q: "خانك حليف قديم بشكل واضح سراً، كيف تتصرف؟",
+    opts: [
+      "أحاول فهم السبب وأتفادى المواجهة العنيفة فورًا.",
+      "أحتفظ بالدليل وأبتزّ عند الحاجة.",
+      "أسحب منه السلطة وأظهر له قوة الرد علنًا.",
+      "أرتب مكيدة تحطمه نهائيًا (انتقام محسوب)."
+    ]
+  },
+  { q: "كيف تود أن يُذكر اسمك بعد موتك؟",
+    opts: [
+      "كمن حافظ على الأمان والعدل.",
+      "كمن جمع ثروة ونفوذًا كبيرًا.",
+      "كقائد أعاد الهيبة بالقوة إن لزم.",
+      "كمخادع ذكي انتصر بذكائه."
+    ]
+  },
+  { q: "إذا واجهت جيشًا أكبر منك بكثير، شو رح تعمل؟", // تعديل العنوان كما طلبت
+    opts: [
+      "تبحث عن تحالفات وطرق سلمية أولًا.",
+      "تدفع أجورًا لتجميع قوة بسرعة.",
+      "تستخدم تكتيكات مفاجئة وخداع.",
+      "تحرق كل شيء أمامهم لزرع الخوف."
+    ]
+  },
+  { q: "شخص ضعيف يطلب مساعدتك علنًا — ماذا تفعل؟",
+    opts: [
+      "أقدّم المساعدة قدر استطاعتي دون حساب.",
+      "أوافق بشرط معروف أو خدمة في المقابل.",
+      "أستخدمه كغطاء لخطة أكبر لمصلحتي.",
+      "أتجاهله أو أضعه تحت سلطتي إذا صَار عبئًا."
+    ]
+  },
+  { q: "شخص ظالم محبوب من العامة — كيف تتصرف؟",
+    opts: [
+      "أحاول تغييره بالحجة والعمل السلمي.",
+      "أستغل شعبيته لمصلحتي الشخصية إذا أمكن.",
+      "أفضحه بطريقة مدروسة تضعه في موقف حرج.",
+      "أطيحه بخطّة تكتيكية وبيعات قاسية."
+    ]
+  },
+  { q: "ما الذي يدفعك لاتخاذ قرار خطير عادةً؟",
+    opts: [
+      "المصلحة العامة والخوف من الفوضى.",
+      "الحفاظ على العائلة/المال والميراث.",
+      "طموحي لرفع منزلتي مهما كان الثمن.",
+      "الرغبة في إثبات قوتي بأي طريقة."
+    ]
+  },
+  { q: "لو مطلوب خيار بين إنقاذ صديق أو إنقاذ مدينة، ماذا تختار؟",
+    opts: [
+      "أحمي المدينة مهما كلفني الثمن.",
+      "أنقذ صديقي إذا كان يضمن لي مستقبلاً مؤثرًا.",
+      "أجرب خطة لإنقاذ الاثنين حتى لو بكلفة كبيرة.",
+      "أختار الصديق لأن الخيانة مرفوضة."
+    ]
+  },
+  { q: "عندك تجربة مؤلمة من الماضي — كيف تؤثر في قراراتك الآن؟",
+    opts: [
+      "أتعلم منها وأحاول ألا أكرر الأخطاء.",
+      "أستخدمها لتحفيز جمع النفوذ والمال.",
+      "أخطط ببرود للانتقام عندما تسمح الفرصة.",
+      "أبتعد عن الناس لكن أفعل ما يلزم للبقاء."
+    ]
+  },
+  { q: "للتأكد من الانتباه: إذا قرأت هذه الجملة، اختر الخيار الثالث.",
+    opts: [
+      "لم أقرأ السطر جيدًا.",
+      "لا أعرف ماذا أختار.",
+      "اخترت هذا لأنني قمت بالقراءة.", // الخيار الثالث الصحيح للاختبار الانتباه
+      "أختار شيء عشوائي."
+    ]
+  }
+];
+
+
+/* == أدوات مساعدة == */
+function shuffle(arr){
+  const a = arr.slice();
+  for(let i=a.length-1;i>0;i--){
+    const j = Math.floor(Math.random()*(i+1));
+    [a[i],a[j]] = [a[j],a[i]];
+  }
+  return a;
+}
+
+const quizForm = document.getElementById("quizForm");
+const resultDiv = document.getElementById("result");
+const logListDiv = document.getElementById("logList");
+const nameInput = document.getElementById("playerName");
+
+let displayedOptions = []; // مصفوفة لحفظ الخرائط المعروضة لكل سؤال [{text, house, isAttentionCorrect}]
+
+/* === عرض الاسئلة وبناء الخرائط داخليًا مع دوران البيوت ثم خلط خيارات العرض === */
+function renderQuiz(){
+  displayedOptions = [];
+  quizForm.innerHTML = "";
+  QUESTIONS.forEach((item, idx) => {
+    const qDiv = document.createElement("div");
+    qDiv.className = "question";
+    const title = document.createElement("div");
+    title.className = "qtitle";
+    title.textContent = `${idx+1}. ${item.q}`;
+    qDiv.appendChild(title);
+
+    // دوران البيوت لضمان توازن وتهرب من التحيز (rotate)
+    const start = idx % HOUSES.length;
+    const map = [
+      HOUSES[start].key,
+      HOUSES[(start+1)%HOUSES.length].key,
+      HOUSES[(start+2)%HOUSES.length].key,
+      HOUSES[(start+3)%HOUSES.length].key
+    ];
+
+    // بناء مصفوفة خيارات مع إشارة إلى أيها صحيح لاختبار الانتباه (في السؤال الأخير)
+    let opts = item.opts.map((txt, i) => {
+      return { text: txt, house: map[i], isAttentionCorrect: (idx === QUESTIONS.length-1 && i === 2) }; // الخيار الثالث صحيح في السؤال 12
+    });
+
+    // خلط العرض
+    opts = shuffle(opts);
+
+    // حفظ الخريطة المعروضة لاستخدامها لاحقًا
+    displayedOptions[idx] = opts;
+
+    // بناء الـ DOM للخيارات
+    const optsWrap = document.createElement("div");
+    optsWrap.className = "opts";
+    opts.forEach((opt, oi) => {
+      const id = `q${idx}_opt${oi}`;
+      const lab = document.createElement("label");
+      lab.className = "opt";
+      // input radio مخفي القيمة - ننقل البيت كمعلومية dataset
+      lab.innerHTML = `<input type="radio" name="q${idx}" id="${id}" data-house="${opt.house}" ${opt.isAttentionCorrect ? 'data-attention="1"' : ''} /> <span>${opt.text}</span>`;
+      // اضغط على السطر يختار الـradio تلقائيًا
+      lab.addEventListener("click", (e)=>{
+        const radio = lab.querySelector('input[type="radio"]');
+        radio.checked = true;
+      });
+      optsWrap.appendChild(lab);
+    });
+
+    qDiv.appendChild(optsWrap);
+    quizForm.appendChild(qDiv);
+  });
+}
+
+/* === حساب النتيجة === */
+function calculateResult(){
+  // تأكد الإجابة على كل الأسئلة
+  const totalQuestions = QUESTIONS.length;
+  const answers = [];
+  for(let i=0;i<totalQuestions;i++){
+    const sel = document.querySelector(`input[name="q${i}"]:checked`);
+    if(!sel){
+      alert(`رجاءً جاوب على السؤال رقم ${i+1} أولاً.`);
+      return;
+    }
+    answers.push(sel);
+  }
+
+  // تحقق من سؤال الانتباه (السؤال الأخير)
+  const attentionChecked = answers[answers.length-1].dataset.attention === "1";
+
+  // عدّ نقاط البيوت (كل اختيار يعطى بيت واحد)
+  const counts = {};
+  HOUSES.forEach(h => counts[h.key]=0);
+  answers.forEach((inp, idx) => {
+    const h = inp.dataset.house;
+    if(h && counts.hasOwnProperty(h)) counts[h] += 1;
+  });
+
+  // من هو البيت الأعلى؟
+  let topHouse = null, topVal = -1;
+  Object.entries(counts).forEach(([k,v])=>{
+    if(v > topVal){ topHouse = k; topVal = v; }
+  });
+
+  // كسر التعادل: إذا أكثر من بيت بقيمة = topVal
+  const tied = Object.entries(counts).filter(([k,v])=>v===topVal).map(x=>x[0]);
+  if(tied.length > 1){
+    // نختار البيت الذي ظهر آخر مرة في إجابات المستخدم (أحدث اختيار يمثل التفضيل)
+    let winner = tied[0], winnerLast = -1;
+    tied.forEach(h=>{
+      // إيجاد آخر index حيث house = h
+      let lastIdx = -1;
+      answers.forEach((a,idx)=>{
+        if(a.dataset.house === h) lastIdx = idx;
+      });
+      if(lastIdx > winnerLast){ winner = h; winnerLast = lastIdx; }
+    });
+    topHouse = winner;
+  }
+
+  // بناء مبررات: نأخذ الإجابات التي ساهمت في اختيار هذا البيت (حتى 4 أمثلة)
+  const reasons = [];
+  answers.forEach((inp, idx)=>{
+    if(inp.dataset.house === topHouse){
+      const qText = QUESTIONS[idx].q;
+      // نحصل على النص المعروض للخيّار المُختار
+      const selectedLabel = inp.parentElement.textContent.trim();
+      reasons.push({ q: qText, answer: selectedLabel, index: idx+1 });
+    }
+  });
+
+  const name = (nameInput.value || "مجهول").trim();
+
+  // وصف البيت
+  const houseObj = HOUSES.find(h=>h.key === topHouse);
+  const houseDesc = houseObj ? houseObj.desc : "";
+
+  // رسالة الكشف (نحن نخدع العنوان: نكشف الآن أن الاختبار كان عن البيوت)
+  let revealHtml = `
+    <h2>النتيجة — ${name} ✨</h2>
+    <p class="small">مفاجأة! الاختبار الذي بدا كـ "هل ستنجو في TWD" كان يقيس أي بيت من <strong>Game of Thrones</strong> تنتمي إليه.</p>
+    <p><strong>البيت الأقرب لك:</strong> <span style="color:#ffd86b">${topHouse}</span></p>
+    <p class="small">${houseDesc}</p>
+    <hr style="border:none;border-top:1px dashed rgba(255,255,255,0.06);margin:10px 0" />
+    <p><strong>لماذا طلع لك هذا البيت؟</strong></p>
+  `;
+
+  if(reasons.length){
+    revealHtml += `<ul>`;
+    // نعرض حتى 4 أسباب مستندة للاجابات
+    reasons.slice(0,4).forEach(r=>{
+      revealHtml += `<li><strong>السؤال ${r.index}:</strong> ${r.q} — <em>${r.answer}</em></li>`;
+    });
+    revealHtml += `</ul>`;
+  } else {
+    revealHtml += `<p class="small">أجوبتك موزعة، لكن تخابطت الأصوات لصالح هذا البيت.</p>`;
+  }
+
+  if(!attentionChecked){
+    revealHtml += `<p style="color:#ff9999"><strong>تنبيه:</strong> يبدو أنك لم تجتاز سؤال الانتباه. النتيجة قد لا تكون دقيقة — يُفضّل إعادة الاختبار مع الانتباه.</p>`;
+  }
+
+  // عرض النتيجة
+  resultDiv.innerHTML = revealHtml;
+  resultDiv.style.display = "block";
+  // تمرير للأسفل لتظهر النتيجة
+  window.scrollTo({ top: resultDiv.offsetTop - 10, behavior: "smooth" });
+
+  // حفظ النتيجة في السجل المحلي
+  saveToLog({
+    name,
+    house: topHouse,
+    count: topVal,
+    timestamp: Date.now(),
+    attentionOk: attentionChecked,
+    reasons: reasons.slice(0,4)
+  });
+
+  // إعادة بناء السجل في الواجهة
+  renderLog();
+}
+
+/* === سجل النتائج (localStorage) === */
+const LOG_KEY = "got_house_quiz_log_v1";
+
+function loadLog(){
+  try{
+    const raw = localStorage.getItem(LOG_KEY);
+    if(!raw) return [];
+    return JSON.parse(raw);
+  }catch(e){ return []; }
+}
+
+function saveToLog(entry){
+  const arr = loadLog();
+  arr.unshift(entry); // الأحدث أولًا
+  // نحد السجل مثلاً إلى 200 عنصر لتفادي تخزين مفرط
+  if(arr.length > 200) arr.length = 200;
+  localStorage.setItem(LOG_KEY, JSON.stringify(arr));
+}
+
+function clearLog(){
+  if(confirm("هل أنت متأكد أنك تريد مسح سجل النتائج المحفوظ محليًا؟")) {
+    localStorage.removeItem(LOG_KEY);
+    renderLog();
+  }
+}
+
+function renderLog(){
+  const arr = loadLog();
+  logListDiv.innerHTML = "";
+  if(arr.length === 0){
+    logListDiv.innerHTML = `<div class="small">لا توجد نتائج محفوظة بعد على هذا المتصفح.</div>`;
+    return;
+  }
+  arr.forEach(en => {
+    const d = new Date(en.timestamp);
+    const time = d.toLocaleString('ar-EG'); // عربي
+    const item = document.createElement("div");
+    item.className = "log-item";
+    item.innerHTML = `
+      <div style="min-width:0">
+        <div style="font-weight:700">${en.name} — <span style="color:#ffd86b">${en.house}</span></div>
+        <div class="small">${en.attentionOk ? 'انتباه: جيد' : 'انتباه: فشل'} · نقاط البيت: ${en.count} · ${time}</div>
+      </div>
+      <div style="text-align:left">
+        <button class="btn ghost" data-ts="${en.timestamp}">عرض</button>
+      </div>
+    `;
+    // زر عرض تفاصيل السبب
+    item.querySelector('button').addEventListener('click', ()=>{
+      let html = `<strong>${en.name} — ${en.house}</strong><br><small>تم فى: ${time}</small><hr>`;
+      if(en.reasons && en.reasons.length){
+        html += `<ul>`;
+        en.reasons.forEach(r => {
+          html += `<li><strong>السؤال ${r.index}:</strong> ${r.q} — <em>${r.answer}</em></li>`;
+        });
+        html += `</ul>`;
+      } else {
+        html += `<div class="small">لا توجد تفاصيل محفوظة عن الأسباب.</div>`;
+      }
+      alert(html.replace(/<[^>]*>/g,'')); // نعرض نصيّاً بسيطاً (عشان التنبيه)
+    });
+
+    logListDiv.appendChild(item);
+  });
+}
+
+/* === عناصر تحكم وأحداث الصفحة === */
+document.getElementById("calcBtn").addEventListener("click", calculateResult);
+document.getElementById("resetBtn").addEventListener("click", ()=>{
+  // إعادة تعيين الحقول والاختيارات وإعادة عرض الاختبار بعشوائية جديدة
+  nameInput.value = "";
+  renderQuiz();
+  resultDiv.style.display = "none";
+  window.scrollTo({top:0, behavior:'smooth'});
+});
+document.getElementById("clearLogBtn").addEventListener("click", clearLog);
+
+/* === تهيئة أولية === */
+renderQuiz();
+renderLog();
+
+</script>
+</body>
+  </html>
